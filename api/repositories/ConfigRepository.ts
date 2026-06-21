@@ -49,6 +49,13 @@ export class ConfigRepository {
     const data = await this.getData();
     const idx = data.projects.findIndex((p) => p.id === id);
     if (idx === -1) return false;
+    const childProjects = data.projects.filter((p) => p.parentId === id);
+    for (const child of childProjects) {
+      const childIdx = data.projects.findIndex((p) => p.id === child.id);
+      if (childIdx !== -1) {
+        data.projects[childIdx] = { ...data.projects[childIdx], parentId: null, updatedAt: new Date().toISOString() };
+      }
+    }
     data.projects.splice(idx, 1);
     await this.saveData(data);
     return true;
@@ -115,6 +122,85 @@ export class ConfigRepository {
     const data = await this.getData();
     data.encryptionKey = key;
     await this.saveData(data);
+  }
+
+  async getChildrenProjects(parentId: string): Promise<Project[]> {
+    const data = await this.getData();
+    return data.projects.filter((p) => p.parentId === parentId);
+  }
+
+  async getInheritanceChain(projectId: string): Promise<Array<{ projectId: string; projectName: string; depth: number }>> {
+    const chain: Array<{ projectId: string; projectName: string; depth: number }> = [];
+    const visited = new Set<string>();
+    let currentId: string | undefined = projectId;
+    let depth = 0;
+
+    while (currentId) {
+      if (visited.has(currentId)) {
+        break;
+      }
+      visited.add(currentId);
+      const project = await this.getProjectById(currentId);
+      if (!project) break;
+      chain.push({ projectId: project.id, projectName: project.name, depth });
+      currentId = project.parentId ?? undefined;
+      depth++;
+    }
+
+    return chain;
+  }
+
+  async checkCircularDependency(projectId: string, newParentId: string | null): Promise<{ hasCycle: boolean; circularPath: string[] }> {
+    if (!newParentId) {
+      return { hasCycle: false, circularPath: [] };
+    }
+    const chain = await this.getInheritanceChain(newParentId);
+    const hasCycle = chain.some((p) => p.projectId === projectId);
+    if (hasCycle) {
+      const circularPath = chain
+        .filter((p) => {
+          const idx = chain.findIndex((c) => c.projectId === p.projectId);
+          const endIdx = chain.findIndex((c) => c.projectId === projectId);
+          return idx >= endIdx;
+        })
+        .map((p) => p.projectId);
+      circularPath.push(projectId);
+      return { hasCycle: true, circularPath };
+    }
+    return { hasCycle: false, circularPath: [] };
+  }
+
+  async getAllDescendants(projectId: string): Promise<string[]> {
+    const descendants: string[] = [];
+    const queue: string[] = [projectId];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const children = await this.getChildrenProjects(current);
+      for (const child of children) {
+        if (!descendants.includes(child.id)) {
+          descendants.push(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+
+    return descendants;
+  }
+
+  async updateEnvironment(projectId: string, envName: string, configs: ConfigItem[]): Promise<ConfigItem[] | null> {
+    const data = await this.getData();
+    const project = data.projects.find((p) => p.id === projectId);
+    if (!project) return null;
+    let env = project.environments.find((e) => e.name === envName);
+    if (!env) {
+      env = { name: envName, configs: [] };
+      project.environments.push(env);
+    }
+    env.configs = configs;
+    project.updatedAt = new Date().toISOString();
+    await this.saveData(data);
+    return env.configs;
   }
 }
 

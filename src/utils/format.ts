@@ -25,6 +25,7 @@ export function logTypeLabel(type: string): string {
     decrypt: '解密',
     client_register: '客户端注册',
     notify: '通知推送',
+    inherit_sync: '继承同步',
   };
   return labels[type] || type;
 }
@@ -37,6 +38,7 @@ export function logTypeColor(type: string): string {
     decrypt: 'bg-purple-500/20 text-purple-400',
     client_register: 'bg-cyan-500/20 text-cyan-400',
     notify: 'bg-rose-500/20 text-rose-400',
+    inherit_sync: 'bg-sky-500/20 text-sky-400',
   };
   return colors[type] || 'bg-slate-500/20 text-slate-400';
 }

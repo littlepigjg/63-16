@@ -16,6 +16,19 @@ router.get('/:projectId/envs/:envName', async (req, res) => {
   }
 });
 
+router.get('/:projectId/envs/:envName/resolved', async (req, res) => {
+  try {
+    const resolved = await configService.getResolvedEnvironmentConfigs(req.params.projectId, req.params.envName);
+    if (!resolved) {
+      res.status(404).json({ success: false, error: 'Project or environment not found' });
+      return;
+    }
+    res.json({ success: true, data: resolved });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to fetch resolved configs' });
+  }
+});
+
 router.post('/:projectId/envs/:envName', async (req, res) => {
   try {
     const { key, value, description, encrypted } = req.body;
@@ -23,7 +36,14 @@ router.post('/:projectId/envs/:envName', async (req, res) => {
       res.status(400).json({ success: false, error: 'Key and value are required' });
       return;
     }
-    const item = await configService.addConfigItem(req.params.projectId, req.params.envName, key, value, description || '', encrypted || false);
+    const item = await configService.addConfigItem(
+      req.params.projectId,
+      req.params.envName,
+      key,
+      value,
+      description || '',
+      encrypted || false
+    );
     if (!item) {
       res.status(409).json({ success: false, error: 'Config key already exists' });
       return;
